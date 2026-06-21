@@ -95,8 +95,8 @@ Our team consists of:
   Basic personal website
   </a>.
   </li>
-  <li><strong>Abhinash Kumar:</strong>
-  Connect with Abhinash on 
+  <li><strong>Kartikey Agarwal:</strong>
+  Connect with Kartikey on 
   <a href="https://www.linkedin.com/in/kartikey-agarwal-48769b31b/">
   LinkedIn
   </a> and 
