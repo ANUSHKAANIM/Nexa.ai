@@ -176,15 +176,17 @@ const checkin = async (req, res) => {
     );
 
     const users = await User.find({ user_token: { $in: userList } });
-    users.forEach((user) => {
-        sendCheckInMail({
-            name: user.username,
-            regNo: user.reg_number,
-            email: user.email,
-            number: user.contactNumber,
-            event: event.name,
-        });
-    });
+    await Promise.all(
+        users.map((user) =>
+            sendCheckInMail({
+                name: user.username,
+                regNo: user.reg_number,
+                email: user.email,
+                number: user.contactNumber,
+                event: event.name,
+            })
+        )
+    );
 
     return ok(res, null, "success");
 };

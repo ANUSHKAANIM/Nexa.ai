@@ -59,7 +59,7 @@ async function completeRegistration({ event, user, billingName, paymentId, mock 
         }
     );
 
-    sendTicket({
+    await sendTicket({
         email: user.email,
         event_name: event.name,
         name: billingName || user.username,

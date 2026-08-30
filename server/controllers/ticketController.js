@@ -51,7 +51,7 @@ const scanCheckin = async (req, res) => {
 
     const user = await User.findOne({ user_token: payload.participant_id });
     if (user) {
-        sendCheckInMail({
+        await sendCheckInMail({
             name: user.username,
             regNo: user.reg_number,
             email: user.email,

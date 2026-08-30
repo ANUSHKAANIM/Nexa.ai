@@ -17,7 +17,7 @@ const generateAndSendOtp = async (email) => {
         lowerCaseAlphabets: false,
     });
 
-    sendOtpEmail(email, OTP);
+    await sendOtpEmail(email, OTP);
 
     const salt = await bcrypt.genSalt(10);
     const hashedOtp = await bcrypt.hash(OTP, salt);

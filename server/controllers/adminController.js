@@ -89,7 +89,7 @@ const inviteAdmin = async (req, res) => {
         { expiresIn: INVITE_TTL }
     );
     const inviteUrl = `${process.env.DEPLOYED_URL}/admin/accept-invite?token=${inviteToken}`;
-    sendAdminInviteEmail(email, name, inviteUrl);
+    await sendAdminInviteEmail(email, name, inviteUrl);
 
     return ok(res, null, "Invite sent");
 };
@@ -146,7 +146,7 @@ const requestPasswordReset = async (req, res) => {
         specialChars: false,
         lowerCaseAlphabets: false,
     });
-    sendAdminPasswordResetEmail(email, OTP);
+    await sendAdminPasswordResetEmail(email, OTP);
 
     const salt = await bcrypt.genSalt(10);
     const hashedOtp = await bcrypt.hash(OTP, salt);
