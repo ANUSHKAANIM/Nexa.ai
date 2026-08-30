@@ -1,4 +1,6 @@
 import { useRouter } from "next/router";
+import { Button } from "@/components/ui/button";
+import ThemeToggle from "@/components/ThemeToggle";
 
 function Header() {
     const router = useRouter();
@@ -7,19 +9,23 @@ function Header() {
         <header className="absolute w-full z-30">
             <div className="max-w-6xl mx-auto px-4 sm:px-6">
                 <div className="flex items-center justify-between h-20">
-                    {/* Desktop navigation */}
                     <nav className="flex grow">
-                        {/* Desktop sign in links */}
-                        <ul className="flex grow justify-end flex-wrap items-center">
+                        <ul className="flex grow justify-end flex-wrap items-center gap-3">
                             <li>
-                                <a
-                                    onClick={() =>
-                                        router.push("/admin/auth")
-                                    }
-                                    className="btn-sm text-white bg-[color:#B106CD] hover:bg-[color:#5400D1] ml-3 cursor-pointer"
+                                <ThemeToggle />
+                            </li>
+                            <li>
+                                <Button
+                                    variant="ghost"
+                                    onClick={() => router.push("/users/signin")}
                                 >
+                                    Sign in
+                                </Button>
+                            </li>
+                            <li>
+                                <Button onClick={() => router.push("/admin/auth")}>
                                     Manage
-                                </a>
+                                </Button>
                             </li>
                         </ul>
                     </nav>

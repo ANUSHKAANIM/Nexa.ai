@@ -1,22 +1,44 @@
-import AdminNavBar from "@/components/AdminNavBar";
-import { getAdminToken } from "@/utils/getAdminToken";
+import PageShell from "@/components/PageShell";
+import { apiPost } from "@/utils/api";
 import Head from "next/head";
 import Image from "next/image";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { Pencil, Share2, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 function AdminEventPage() {
     const router = useRouter();
     const eventId = router.query.eventId;
-    const [eventData, setEventData] = useState([]);
-    const createdAt = eventData.createdAt;
-    const date = new Date(createdAt);
-    const adminId = getAdminToken();
+    const [eventData, setEventData] = useState(null);
 
-    const dateString = date.toLocaleDateString();
-    const timeString = date.toLocaleTimeString("en-US", { hour12: false });
+    useEffect(() => {
+        if (!eventId) return;
+        const fetchEvent = async () => {
+            try {
+                const data = await apiPost("/getevent", { event_id: eventId });
+                setEventData(data);
+            } catch (error) {
+                console.error("Error fetching event data:", error.message);
+            }
+        };
+        fetchEvent();
+    }, [eventId]);
 
-    // function to handle share button click
     const share = () => {
         if (navigator.share) {
             navigator
@@ -25,246 +47,151 @@ function AdminEventPage() {
                     text: "Check out this event!",
                     url: window.location.href,
                 })
-                .then(() => console.log("Successful share"))
-                .catch((error) => console.log("Error sharing", error));
+                .catch(() => {});
         }
     };
 
-    // function to handle delete event button click
     const deleteEvent = async () => {
-        const confirmDelete = window.confirm(
-            "This action will permanently delete the event and all associated data. Do you want to continue?"
-        );
-        if (!confirmDelete) {
-            return;
-        }
         try {
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/deleteevent`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        event_id: eventId,
-                        admin_id: adminId,
-                    }),
-                }
-            );
-            if (response.ok) {
-                const data = await response.json();
-                if(data.msg == "success"){
-                    router.push("dashboard/admin/");
-                }
-            } else {
-                throw new Error(`${response.status} ${response.statusText}`);
-            }
+            await apiPost("/deleteevent", { event_id: eventId });
+            toast.success("Event deleted");
+            router.push("/admin/dashboard");
         } catch (error) {
-            console.error("Error fetching event data:", error.message);
+            toast.error(error.message || "Failed to delete event. Please try again.");
         }
     };
 
-    // function that fetches the event data on load
-    const fetchEvent = async () => {
-        try {
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/getevent`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        event_id: eventId,
-                    }),
-                }
-            );
-            if (response.ok) {
-                const data = await response.json();
-                setEventData(data);
-            } else {
-                throw new Error(`${response.status} ${response.statusText}`);
-            }
-        } catch (error) {
-            console.error("Error fetching event data:", error.message);
-        }
-    };
-
-    useEffect(() => {
-        fetchEvent();
-    }, [eventId]); // fetch event on component mount and when eventId changes
-
-    if (!eventData || !eventData.cover)
-        // If event data isn't loaded correctly, it should recall API
-        return <div onLoad={fetchEvent()}>loading...</div>;
-    else
+    if (!eventData) {
         return (
-            <div className="pt-20 lg:pt-8 bg-[color:var(--primary-color)]">
-                <AdminNavBar />
-                <div className="flex flex-col items-center justify-center">
-                    <Head>
-                        <title>{eventData.name}</title>
-                    </Head>
-                    {/* Top div with image */}
-                    <div className="relative h-40 sm:h-[25rem] overflow-hidden container shadow-lg">
-                        {/* blurred image background */}
+            <PageShell role="admin">
+                <div className="container mx-auto px-4">
+                    <Skeleton className="h-64 w-full rounded-xl mb-4" />
+                    <Skeleton className="h-40 w-full rounded-xl" />
+                </div>
+            </PageShell>
+        );
+    }
+
+    const createdAt = new Date(eventData.createdAt);
+
+    return (
+        <PageShell role="admin">
+            <Head>
+                <title>{eventData.name}</title>
+            </Head>
+            <div className="container mx-auto px-4 pb-16">
+                <div className="relative h-56 sm:h-96 overflow-hidden rounded-xl shadow-md">
+                    {eventData.cover && (
                         <Image
                             src={eventData.cover}
                             alt={eventData.name}
                             fill
-                            placeholder="blur"
-                            blurDataURL={eventData.cover}
-                            className="h-[25rem] container filter blur hidden lg:block object-cover"
+                            className="object-cover"
                         />
-                        <div className="absolute inset-0 w-full h-40 sm:h-[25rem] container">
-                            <Image
-                                src={eventData.cover}
-                                alt="Event image"
-                                fill
-                                className="absolute object-contain object-center"
-                            />
+                    )}
+                    {eventData.category && (
+                        <Badge className="absolute top-3 left-3">
+                            {eventData.category}
+                        </Badge>
+                    )}
+                </div>
+
+                <div className="bg-card border border-border rounded-xl shadow-sm p-6 mt-4">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                        <div>
+                            <h1 className="text-3xl font-bold mb-2">{eventData.name}</h1>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                                <span><strong className="text-foreground">Date:</strong> {eventData.date}</span>
+                                <span><strong className="text-foreground">Time:</strong> {eventData.time}</span>
+                                <span><strong className="text-foreground">Venue:</strong> {eventData.venue}</span>
+                                <span><strong className="text-foreground">Organizer:</strong> {eventData.organizer}</span>
+                            </div>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                            <Button
+                                variant="outline"
+                                onClick={() => router.push(`/event/${eventId}/edit`)}
+                                className="gap-2"
+                            >
+                                <Pencil className="h-4 w-4" />
+                                Edit
+                            </Button>
+                            <Button
+                                onClick={() => router.push(`/event/${eventId}/registration`)}
+                                className="gap-2"
+                            >
+                                <Users className="h-4 w-4" />
+                                Registrations
+                            </Button>
                         </div>
                     </div>
 
-                    {/* Second div with event details and ticket pricing */}
-                    <div className="container bg-white py-4 mt-4 rounded-lg shadow-md">
-                        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-                            <div className="flex flex-col lg:flex-row lg:items-center justify-between">
-                                <div className="flex flex-col">
-                                    <h1 className="text-4xl font-bold text-gray-900 mb-2">
-                                        {eventData.name}
-                                    </h1>
-                                    <div className="flex flex-col md:flex-row">
-                                        <div className="text-md text-gray-800 mr-4">
-                                            <span className="font-bold">
-                                                Date:
-                                            </span>{" "}
-                                            {eventData.date}
-                                        </div>
-                                        <div className="text-md text-gray-800 mr-4">
-                                            <span className="font-bold">
-                                                Time:
-                                            </span>{" "}
-                                            {eventData.time}
-                                        </div>
-                                        <div className="text-md text-gray-800 mr-4">
-                                            <span className="font-bold">
-                                                Venue:
-                                            </span>{" "}
-                                            {eventData.venue}
-                                        </div>
-                                        <div className="text-md text-gray-800 mr-4">
-                                            <span className="font-bold">
-                                                Organizer:
-                                            </span>{" "}
-                                            {eventData.organizer}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="text-left lg:text-right mt-4 lg:mt-0">
-                                    <button
-                                        onClick={() =>
-                                            router.push(
-                                                `/event/${eventData.event_id}/registration`
-                                            )
-                                        }
-                                        className="px-6 py-2 bg-[color:#B106CD] text-white rounded hover:bg-[color:#B106CD] focus:outline-none"
-                                    >
-                                        Registrations
-                                    </button>
-                                </div>
-                            </div>
-                            <div className="border-b border-gray-300 mt-8 mb-4"></div>
-                            <div className="flex flex-col md:flex-row md:items-center justify-between">
-                                <div className="flex flex-col">
-                                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                                        Ticket Pricing
-                                    </h3>
-                                    <p className="text-gray-800">
-                                        ₹{eventData.price}
-                                    </p>
-                                </div>
-                                <div className="flex mt-4 md:mt-0">
-                                    <button
-                                        onClick={share}
-                                        className="px-6 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 focus:outline-none"
-                                    >
-                                        Share
-                                    </button>
-                                </div>
-                            </div>
+                    <div className="border-t border-border mt-6 pt-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h3 className="font-semibold mb-1">Ticket Pricing</h3>
+                            <p className="text-muted-foreground">
+                                {eventData.price === 0 ? "Free event" : `₹${eventData.price}`}
+                                {eventData.capacity ? ` · Capacity ${eventData.capacity}` : ""}
+                            </p>
                         </div>
+                        <Button variant="secondary" onClick={share} className="gap-2 w-fit">
+                            <Share2 className="h-4 w-4" />
+                            Share
+                        </Button>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-4 mt-4">
+                    <div className="bg-card border border-border rounded-xl shadow-sm p-6">
+                        <h3 className="font-semibold mb-2">About the Event</h3>
+                        <p className="text-muted-foreground">{eventData.description}</p>
                     </div>
 
-                    {/* Third div with major event details */}
-                    <div className="container mt-4 bg-[color:var(--primary-color)]">
-                        <div className="container">
-                            <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-4">
-                                <div className="mb-4 max-w-5xl bg-white px-6 py-4 rounded-lg shadow-md">
-                                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                                        About the Event
-                                    </h3>
-                                    {Array(3)
-                                        .fill()
-                                        .map((_, index) => (
-                                            <p
-                                                key={index}
-                                                className="text-gray-600 text-md"
-                                            >
-                                                {eventData.description}
-                                            </p>
-                                        ))}
-                                </div>
-                                <div className="mb-4 bg-white px-6 py-4 rounded-lg shadow-md">
-                                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                                        Event Overview
-                                    </h3>
-                                    <ul className="text-gray-600">
-                                        {[
-                                            {
-                                                type: "Total Registrations",
-                                                price: eventData.participants
-                                                    .length,
-                                            },
-                                            {
-                                                type: "Event Created At",
-                                                price: `${dateString} at ${timeString}`,
-                                            },
-                                        ].map((item, index) => (
-                                            <li
-                                                className="flex items-center h-16 py-1 rounded-md p-4 mb-2 hover:shadow-md"
-                                                key={index}
-                                            >
-                                                <span className="w-1/2">
-                                                    {item.type}
-                                                </span>
-                                                <span className="w-1/2 text-center">
-                                                    {item.price}
-                                                </span>
-                                            </li>
-                                        ))}
-                                        <li className="flex items-center h-16 py-1 rounded-md p-4 mb-2">
-                                            <button
-                                                onClick={deleteEvent}
-                                                className="w-full bg-[color:#B106CD] hover:bg-[color:#B106CD] text-white py-1 px-2 rounded-md text-sm transition duration-300 ease-in-out"
-                                            >
-                                                Delete this event
-                                            </button>
-                                        </li>
-                                    </ul>
-                                    <p className="text-sm text-[color:#B106CD] mt-6">
-                                        *Caution: This action will permanently
-                                        delete the event and all associated
-                                        data. Are you sure you want to proceed?
-                                    </p>
-                                </div>
-                            </div>
+                    <div className="bg-card border border-border rounded-xl shadow-sm p-6 flex flex-col gap-4">
+                        <h3 className="font-semibold">Event Overview</h3>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Total Registrations</span>
+                            <span>{eventData.participants?.length ?? 0}</span>
                         </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Created At</span>
+                            <span>
+                                {createdAt.toLocaleDateString()} at{" "}
+                                {createdAt.toLocaleTimeString("en-US", { hour12: false })}
+                            </span>
+                        </div>
+
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" className="w-full mt-2">
+                                    Delete this event
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete this event?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        This will permanently delete the event and all
+                                        associated registration data. This action cannot
+                                        be undone.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                        onClick={deleteEvent}
+                                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                        Delete
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
                     </div>
                 </div>
             </div>
-        );
+        </PageShell>
+    );
 }
 
 export default AdminEventPage;

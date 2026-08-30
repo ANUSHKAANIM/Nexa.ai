@@ -1,56 +1,46 @@
 const mongoose = require("mongoose");
-const { eventSchema } = require("./event");
 
 const adminSchema = new mongoose.Schema(
     {
         admin_id: {
             type: String,
-            requird: true,
+            required: true,
+            unique: true,
         },
         email: {
             type: String,
+            required: true,
             unique: true,
+            trim: true,
+            lowercase: true,
         },
         pass: {
             type: String,
         },
         name: {
             type: String,
+            required: true,
+            trim: true,
         },
-        eventCreated: [],
-
-        expireAt: {
-            type: Date,
-            default: Date.now,
-            index: { expires: "2592000s" },
+        role: {
+            type: String,
+            enum: ["admin", "superadmin"],
+            default: "admin",
+            index: true,
+        },
+        status: {
+            type: String,
+            enum: ["invited", "active"],
+            default: "invited",
+        },
+        active: {
+            type: Boolean,
+            default: true,
         },
     },
     { timestamps: true }
 );
 
 const Admin = mongoose.model("Admin", adminSchema);
-
-const test_credential = new Admin({
-    admin_id: "hqwkufywealufyewf.weiugbfre654wegreg",
-    email: "invite.testing@gmail.com",
-    name: "test",
-    pass: "invite123",
-});
-
-// Admin.find(
-//     { admin_id: "hqwkufywealufyewf.weiugbfre654wegreg" },
-//     async function (err, docs) {
-//         if (docs.length === 0) {
-//             test_credential.save((error, success) => {
-//                 if (error) console.log(error);
-//                 else
-//                     console.log(
-//                         "Saved::Admin::test credentials",
-//                         test_credential
-//                     );
-//             });
-//         }
-//     }
-// );
 
 module.exports = Admin;

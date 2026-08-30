@@ -1,19 +1,12 @@
 const User = require("../models/user");
+const { ok, fail } = require("../libs/response");
 
+// route - POST /user/details  (authenticated user)
 const userDetails = async (req, res) => {
-    user_id = req.body.user_token;
-    console.log(user_id)
-
-    User.find({ user_token: user_id }, async function (err, docs) {
-        if (err) {
-            console.log(err);
-        } else {
-            res.status(200).send(docs[0]);
-        }
-    });
+    const user = await User.findOne({ user_token: req.user.id });
+    if (!user) return fail(res, "User not found", 404);
+    return ok(res, user);
 };
-
-
 
 module.exports = {
     userDetails,

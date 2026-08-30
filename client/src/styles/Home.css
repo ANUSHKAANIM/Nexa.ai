@@ -5,20 +5,20 @@
 }
 
 .rc-slider-track{
-    background-color: #B106CD !important
+    background-color: hsl(var(--primary)) !important
 }
 
 .rc-slider-handle{
-    border-color: #B106CD !important
+    border-color: hsl(var(--primary)) !important
 }
 
 .rc-slider-handle:hover{
-    border-color: #B106CD !important
+    border-color: hsl(var(--primary)) !important
 }
 
 .rc-slider-handle-dragging.rc-slider-handle-dragging.rc-slider-handle-dragging{
-    border-color: #B106CD !important;
-    box-shadow: 0 0 0 5px #B106CD !important
+    border-color: hsl(var(--primary)) !important;
+    box-shadow: 0 0 0 5px hsl(var(--primary)) !important
 }
 
 /* Landing Page Styles */

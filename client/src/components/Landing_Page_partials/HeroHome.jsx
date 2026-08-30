@@ -11,15 +11,15 @@ function HeroHome() {
                     <div className="max-w-3xl mx-auto text-center pb-12 md:pb-16">
                         <h1 className="h1 m-2">
                             {"<"}
-                            <span className="text-[color:#B106CD]">
+                            <span className="text-primary">
                                 NEXA
                             </span>
                             {">"}
-                            <p className="mt-3 text-5xl text-gray-500">
+                            <p className="mt-3 text-5xl text-muted-foreground">
                                 {"Event Management"}
                             </p>
                         </h1>
-                        <p className="text-2xl text-gray-500 mb-8">
+                        <p className="text-2xl text-muted-foreground mb-8">
                             "Making Events Easy: From Registration to Tickets, All in One Place"
                         </p>
 
@@ -47,14 +47,14 @@ function HeroHome() {
                             <div>
                                 <a
                                     href="/users/signin"
-                                    className="btn text-white bg-[color:#B106CD] hover:bg-[color:#5400D1] w-full mb-4 sm:w-auto sm:mb-0"
+                                    className="btn text-primary-foreground bg-primary hover:bg-primary/90 w-full mb-4 sm:w-auto sm:mb-0"
                                 >
                                     Signin
                                 </a>
                             </div>
                             <div>
                                 <a
-                                    className="btn text-white bg-gray-700 hover:bg-gray-800 w-full sm:w-auto sm:ml-4"
+                                    className="btn text-background bg-foreground hover:opacity-90 w-full sm:w-auto sm:ml-4"
                                     href="/users/signup"
                                 >
                                     Signup
@@ -62,7 +62,7 @@ function HeroHome() {
                             </div>
                             <div>
                                 <a
-                                    className="btn text-white bg-[color:#B106CD] hover:bg-[color:#5400D1] w-full sm:w-auto sm:ml-4"
+                                    className="btn text-primary-foreground bg-primary hover:bg-primary/90 w-full sm:w-auto sm:ml-4"
                                     href="/admin/auth"
                                 >
                                     Admin

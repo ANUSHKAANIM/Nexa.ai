@@ -1,176 +1,213 @@
-import Dashboard_Filter from "@/components/Dashboard_Filter";
-import Popup_Filter from "@/components/Popup_Filter";
-import UserNavBar from "@/components/UserNavBar";
-import { getUserToken } from "@/utils/getUserToken";
-import Image from "next/image";
-import { useRouter } from "next/router";
+import PageShell from "@/components/PageShell";
+import EventFilters from "@/components/EventFilters";
+import EventGrid from "@/components/EventGrid";
+import { apiGet, apiPost } from "@/utils/api";
+import { useFilteredEvents } from "@/utils/useFilteredEvents";
+import { DEFAULT_FILTER_OPTIONS } from "@/utils/constants";
 import { useEffect, useState } from "react";
-import { AiOutlinePlus } from "react-icons/ai";
-import { FaUsers } from "react-icons/fa";
-import { RxHamburgerMenu } from "react-icons/rx";
+import { toast } from "sonner";
+import { SlidersHorizontal, Ticket } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 
-function UserDashboard() {
-    const router = useRouter();
-    const picRatio = 0.606;
-
-    const userIdCookie = getUserToken();
+function PastEvents() {
     const [pastEvents, setPastEvents] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+    const [filterOptions, setFilterOptions] = useState(DEFAULT_FILTER_OPTIONS);
+    const [selectedTicket, setSelectedTicket] = useState(null);
+    const [qrDataUrl, setQrDataUrl] = useState(null);
+    const [cancelling, setCancelling] = useState(false);
 
-    const fetchAllEvents = async () => {
-        const response = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/user/details`,
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    user_token: userIdCookie,
-                }),
-            }
-        );
-        if (!response.ok) {
-            throw new Error(`${response.status} ${response.statusText}`);
-        }
+    const fetchPastEvents = async () => {
         try {
-            const data = await response.json();
-            // console.log(data.registeredEvents);
-            setPastEvents(data.registeredEvents);
+            const data = await apiGet("/user/details");
+            setPastEvents(data.registeredEvents || []);
         } catch (error) {
-            console.error("Invalid JSON string:", error.message);
+            console.error("Failed to fetch past events:", error.message);
+        } finally {
+            setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchAllEvents();
+        fetchPastEvents();
     }, []);
 
-    const [popupFilterOpen, setPopupFilterOpen] = useState(false);
-    const [filterOptions, setFilterOptions] = useState({
-        keyword: "",
-        category: "",
-        dateRange: "",
-        price: [10, 100],
-    });
+    useEffect(() => {
+        if (!selectedTicket) {
+            setQrDataUrl(null);
+            return;
+        }
+        apiGet(`/event/${selectedTicket.event_id}/ticket-qr`)
+            .then((data) => setQrDataUrl(data.qrDataUrl))
+            .catch(() => setQrDataUrl(null));
+    }, [selectedTicket]);
 
-    const handleFilterApply = () => {
-        // Perform the search/filter operation based on the filter options
-        // ...
-        console.log(filterOptions);
-        setPopupFilterOpen(false); // Close the popup filter
+    const filteredEvents = useFilteredEvents(pastEvents, filterOptions);
+
+    const handleClear = () => {
+        setFilterOptions(DEFAULT_FILTER_OPTIONS);
+        setMobileFilterOpen(false);
+    };
+
+    const handleCancel = async () => {
+        setCancelling(true);
+        try {
+            await apiPost(`/event/${selectedTicket.event_id}/cancel`);
+            toast.success("Booking cancelled");
+            setSelectedTicket(null);
+            fetchPastEvents();
+        } catch (error) {
+            toast.error(error.message || "Failed to cancel booking.");
+        } finally {
+            setCancelling(false);
+        }
     };
 
     return (
-        <div className="pt-20 lg:pt-8 overflow-y-hidden bg-[color:var(--primary-color)]">
-            <UserNavBar />
-            <div className="flex m-auto">
-                <div className="flex mx-auto container ">
-                    <div className="flex m-auto gap-4 lg:gap-8  overflow-y-hidden w-full h-[calc(88vh)]">
-                        {/* Render the regular filter for medium screens and above */}
-                        <div className="hidden md:flex flex-col p-4 sticky top-0 w-1/6 md:w-1/4">
-                            <Dashboard_Filter
-                                filterOptions={filterOptions}
-                                setFilterOptions={setFilterOptions}
-                                handleFilterApply={handleFilterApply}
-                            />
-                        </div>
-                        {/* Render the popup filter for small screens */}
-                        {popupFilterOpen && (
-                            <div className="md:hidden fixed inset-0 z-10 bg-black bg-opacity-50 flex items-center justify-center">
-                                <div className="bg-white rounded-lg p-4 w-5/6">
-                                    <Popup_Filter
-                                        filterOptions={filterOptions}
-                                        setFilterOptions={setFilterOptions}
-                                        handleFilterApply={handleFilterApply}
-                                        handleClose={() =>
-                                            setPopupFilterOpen(false)
-                                        }
-                                    />
-                                </div>
-                            </div>
-                        )}
-                        {/* Render the main content of the dashboard */}
-                        <div className="flex w-full md:w-3/4 mx-auto justify-between container">
-                            <div className="p-4 overflow-y-auto w-full h-[calc(80vh)]">
-                                <h2 className="text-lg font-medium mb-4">
-                                    Events
-                                </h2>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                                    {pastEvents.length === 0 ? (
-                                        <p>No past events</p>
-                                    ) : (
-                                        pastEvents.map((event) => (
-                                            <div
-                                                className="hover:scale-105 transition-all mt-5 bg-[color:var(--white-color)] rounded-lg shadow-md px-3 py-3 grayscale opacity-80"
-                                                key={event._id}
-                                            >
-                                                <div className="relative h-[25rem]">
-                                                    {event.profile && (
-                                                        <Image
-                                                            fill
-                                                            className="object-cover h-full w-full rounded-md"
-                                                            src={event.profile}
-                                                            alt=""
-                                                            sizes="(min-width: 640px) 100vw, 50vw"
-                                                            priority
-                                                        />
-                                                    )}
-                                                </div>
-                                                <div className="flex flex-row justify-between items-start mt-4">
-                                                    <div className="px-2">
-                                                        <p className="text-sm text-gray-800 font-bold">
-                                                            {event.name.length >
-                                                            30
-                                                                ? event.name.slice(
-                                                                      0,
-                                                                      30
-                                                                  ) + "..."
-                                                                : event.name}
-                                                        </p>
-                                                        <p className="text-sm text-gray-800">
-                                                            {event.venue}
-                                                        </p>
-                                                        <p className="text-sm text-gray-800">
-                                                            {event.date}
-                                                        </p>
-                                                    </div>
-                                                    {/* Star component */}
-                                                    <div className="flex flex-col justify-end items-center">
-                                                        <span className="w-full flex flex-row items-center">
-                                                            <FaUsers />
-                                                            <span className="ml-2 text-sm">
-                                                                4,92
-                                                            </span>
-                                                        </span>
-                                                        <p className="text-sm text-gray-800 mt-2">
-                                                            <strong className="whitespace-nowrap">
-                                                                ₹ {event.price}
-                                                            </strong>
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                        {/* Bottom buttons */}
-                        <div className="fixed bottom-3 right-3">
-                            {/* Button to open the popup filter */}
-                            <button
-                                onClick={() => setPopupFilterOpen(true)}
-                                className="md:hidden flex items-center justify-center w-[4rem] h-[4rem] text-white rounded-full bg-[color:#B106CD] hover:bg-[color:#B106CD] hover:scale-105 shadow-lg cursor-pointer transition-all ease-in-out focus:outline-none"
-                                title="Filter Events"
+        <PageShell role="user">
+            <div className="container mx-auto px-4 pb-16">
+                <div className="flex gap-8">
+                    <aside className="hidden md:block w-64 shrink-0 sticky top-24 self-start">
+                        <EventFilters
+                            filterOptions={filterOptions}
+                            setFilterOptions={setFilterOptions}
+                            onClear={handleClear}
+                        />
+                    </aside>
+
+                    <main className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-medium">Past Events</h2>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="md:hidden gap-2"
+                                onClick={() => setMobileFilterOpen(true)}
                             >
-                                <RxHamburgerMenu className="w-6 h-6" />
-                            </button>
+                                <SlidersHorizontal className="h-4 w-4" />
+                                Filters
+                            </Button>
                         </div>
-                    </div>
+                        <EventGrid
+                            events={filteredEvents}
+                            loading={loading}
+                            muted
+                            onEventClick={(event) => setSelectedTicket(event)}
+                            emptyTitle="No past events"
+                            emptyDescription="Tickets you book will show up here."
+                        />
+                    </main>
                 </div>
             </div>
-        </div>
+
+            <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+                <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+                    <SheetTitle className="sr-only">Filter Events</SheetTitle>
+                    <EventFilters
+                        filterOptions={filterOptions}
+                        setFilterOptions={setFilterOptions}
+                        onClear={handleClear}
+                    />
+                </SheetContent>
+            </Sheet>
+
+            <Dialog open={!!selectedTicket} onOpenChange={(open) => !open && setSelectedTicket(null)}>
+                <DialogContent>
+                    {selectedTicket && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle className="flex items-center gap-2">
+                                    <Ticket className="h-5 w-5 text-primary" />
+                                    {selectedTicket.name}
+                                </DialogTitle>
+                                <DialogDescription>
+                                    {selectedTicket.venue} · {selectedTicket.date}
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <div className="flex justify-center py-2">
+                                {qrDataUrl ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={qrDataUrl} alt="Ticket QR code" className="h-40 w-40" />
+                                ) : (
+                                    <Skeleton className="h-40 w-40" />
+                                )}
+                            </div>
+
+                            <div className="flex flex-col gap-2 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Pass number</span>
+                                    <span className="font-mono">{selectedTicket.passID}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground">Status</span>
+                                    <Badge variant={selectedTicket.entry ? "success" : "secondary"}>
+                                        {selectedTicket.entry ? "Checked in" : "Not checked in"}
+                                    </Badge>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Amount paid</span>
+                                    <span>{selectedTicket.price === 0 ? "Free" : `₹${selectedTicket.price}`}</span>
+                                </div>
+                            </div>
+
+                            {!selectedTicket.entry && (
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="destructive" className="w-full mt-2">
+                                            Cancel Registration
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Cancel this registration?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                {selectedTicket.price > 0
+                                                    ? "If this was a paid booking, a refund will be issued automatically."
+                                                    : "This will free up your spot for this event."}
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Keep it</AlertDialogCancel>
+                                            <AlertDialogAction
+                                                onClick={handleCancel}
+                                                disabled={cancelling}
+                                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                            >
+                                                {cancelling ? "Cancelling..." : "Cancel Registration"}
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            )}
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
+        </PageShell>
     );
 }
 
-export default UserDashboard;
+export default PastEvents;

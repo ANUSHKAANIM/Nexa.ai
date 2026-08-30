@@ -1,10 +1,13 @@
 const mongoose = require("mongoose");
 
+const CATEGORIES = ["Technical", "Cultural", "Workshop", "Sports", "Other"];
+
 const eventSchema = new mongoose.Schema(
     {
         event_id: {
             type: String,
-            requird: true,
+            required: true,
+            unique: true,
         },
         name: {
             type: String,
@@ -37,14 +40,42 @@ const eventSchema = new mongoose.Schema(
         organizer: {
             type: String,
         },
+        category: {
+            type: String,
+            enum: CATEGORIES,
+        },
+        capacity: {
+            type: Number,
+            default: null,
+        },
+        admin_id: {
+            type: String,
+            required: true,
+            index: true,
+        },
         participants: [],
+        waitlist: [
+            {
+                id: String,
+                name: String,
+                email: String,
+                joinedAt: { type: Date, default: Date.now },
+            },
+        ],
     },
     { timestamps: true }
 );
+
+// Supports the /getallevents filter/pagination query (category exact-match,
+// price range) — event_id and admin_id already indexed above.
+eventSchema.index({ category: 1 });
+eventSchema.index({ price: 1 });
+eventSchema.index({ createdAt: -1 });
 
 const Event = mongoose.model("Event", eventSchema);
 
 module.exports = {
     Event,
     eventSchema,
+    CATEGORIES,
 };

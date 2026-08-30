@@ -6,19 +6,9 @@ import LandingPageDevelopers from "@/utils/landing_page_developers";
 import React from "react";
 import { useEffect } from "react";
 
-const [feature1, feature2, feature3, dev1, dev2, dev3, pm1] = LandingPageDevelopers;
+const [feature1, feature2, feature3] = LandingPageDevelopers;
 
 function LandingPage() {
-
-    // run the server when a user enters the site
-    // const fetchAllEvents = async () => {
-    //     const response = await fetch(
-    //         `${process.env.NEXT_PUBLIC_API_URL}/getallevents`
-    //     );
-    //     if (!response.ok) {
-    //         throw new Error(`${response.status} ${response.statusText}`);
-    //     }
-    // };
     const fetchAllEvents = async () => {
         try {
             const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/getallevents`);
@@ -43,7 +33,7 @@ function LandingPage() {
                 <main className="grow">
                     <HeroHome />
                     <FeaturesZigZag images={[feature1, feature2, feature3]} />
-                    <Developers images={[dev1, dev2, dev3, pm1]} />
+                    <Developers />
                 </main>
             </div>
         </div>

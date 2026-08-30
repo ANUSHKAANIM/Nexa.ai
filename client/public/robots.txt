@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /event/*/registration
+Disallow: /event/*/adminevents
+Disallow: /event/*/edit

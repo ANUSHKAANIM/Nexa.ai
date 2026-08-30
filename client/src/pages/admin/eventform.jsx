@@ -1,30 +1,25 @@
-import AdminNavBar from "@/components/AdminNavBar";
-import CreateEventForm from "@/components/CreateEventForm";
+import PageShell from "@/components/PageShell";
+import EventForm from "@/components/EventForm";
 import Image from "next/image";
-import React from "react";
 
-function eventform() {
+function EventFormPage() {
     return (
-        <div className="pt-20 lg:pt-8 bg-#B106CD">
-            <AdminNavBar />
-            <center className = "p-6">
-                <div className="flex flex-col md:h-[calc(88vh)] md:w-[90%] md:flex-row justify-center bg-[color:var(--primary-color)]">
-                    <div className="flex-1 mx-6 mb-6 bg-[color:var(--primary-color)]">
+        <PageShell role="admin">
+            <div className="container mx-auto px-4 pb-16">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                    <div className="hidden md:block relative h-[32rem] rounded-xl overflow-hidden">
                         <Image
                             src="/img/eventsFormImg.jpg"
-                            alt="Event Image"
-                            width={500}
-                            height={500}
-                            className="w-full h-full object-contain md:object-cover rounded-lg shadow-lg"
+                            alt=""
+                            fill
+                            className="object-cover"
                         />
                     </div>
-                    <div className="flex-1 m-6 md:m-0 md:mr-6 md:mb-6">
-                        <CreateEventForm />
-                    </div>
+                    <EventForm mode="create" />
                 </div>
-            </center>
-        </div>
+            </div>
+        </PageShell>
     );
 }
 
-export default eventform;
+export default EventFormPage;

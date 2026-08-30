@@ -1,238 +1,118 @@
-import { setAdminToken } from "@/utils/setAdminToken";
+import { getSession } from "@/utils/getSession";
+import { apiPost } from "@/utils/api";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
-import { FiArrowLeft } from "react-icons/fi";
-import Cookies from "universal-cookie";
+import { ArrowLeft } from "lucide-react";
+import StepIndicator from "@/components/StepIndicator";
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export async function getServerSideProps(context) {
-    const cookies = new Cookies(context.req.headers.cookie);
-    const adminId = cookies.get("admin_token");
-    if (!adminId) {
-        return {
-            props: { adminIdCookie: null },
-        };
-    }
+    const session = await getSession(context);
     return {
-        props: { adminIdCookie: adminId },
+        props: { isSignedIn: session?.role === "admin" || session?.role === "superadmin" },
     };
 }
 
-export default function signin({ adminIdCookie }) {
+export default function AdminAuth({ isSignedIn }) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [step, setStep] = useState(1);
     const [message, setMessage] = useState({ errorMsg: "", successMsg: "" });
+    const [submitting, setSubmitting] = useState(false);
     const router = useRouter();
 
     useEffect(() => {
-        // If cookie found, Redirect to dashboard
-        if (adminIdCookie) {
-            setStep(2); // Skip auth steps
-
-            setTimeout(() => {
-                // Set success message
-                setMessage({
-                    errorMsg: "",
-                    successMsg: "Redirecting you ...",
-                });
-            }, 500);
-
-            // Redirect to dashboard
-            setTimeout(() => {
-                router.push("/admin/dashboard");
-            }, 800);
+        if (isSignedIn) {
+            setStep(2);
+            setMessage({ errorMsg: "", successMsg: "Redirecting you ..." });
+            setTimeout(() => router.push("/admin/dashboard"), 800);
         }
     }, []);
 
     const handleSubmit = async (event) => {
         event.preventDefault();
-        const response = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/admin/auth`,
-            {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    email: email,
-                    password: password,
-                }),
-            }
-        );
-        const data = await response.json();
-        if (response.status === 200) {
-            setMessage({ errorMsg: "", successMsg: data.msg });
-            console.log(data);
-            setStep(2); // Move to next step on the same page
-
-            setAdminToken(data.admin_token); // set cookie when signed up
-        } else {
-            console.error(`Failed with status code ${response.status}`);
-            setMessage({ errorMsg: data.msg, successMsg: "" });
+        setSubmitting(true);
+        try {
+            await apiPost("/admin/auth", { email, password });
+            setMessage({ errorMsg: "", successMsg: "Success" });
+            setStep(2);
+        } catch (error) {
+            setMessage({ errorMsg: error.message, successMsg: "" });
+        } finally {
+            setSubmitting(false);
         }
     };
 
     return (
-        <div className="m-2">
-            {/* back button */}
-            <FiArrowLeft
-                onClick={() => router.push("/")}
-                size={24}
-                className="cursor-pointer"
-            />
-            {/* Page heading */}
-            <div className="text-center text-3xl font-bold">
-                Admin Authentication Page
-            </div>
+        <div className="min-h-screen bg-background p-4">
+            <button onClick={() => router.push("/")} className="mb-4">
+                <ArrowLeft className="h-6 w-6" />
+            </button>
 
-            {/* Page Content */}
-            <div className="max-w-3xl mx-auto mt-10">
-                {/* Steps Nav */}
-                <div className="flex items-center justify-center">
-                    {/* Step 1: normal-height:fit; mobile-view: 6rem*/}
-                    <div
-                        className={`w-full h-24 lg:h-fit ${
-                            step === 1 ? `font-medium` : ``
-                        }`}
-                    >
-                        <div
-                            className={`h-full border-2 rounded-l-lg px-5 py-2 ${
-                                step >= 1
-                                    ? `text-white bg-[color:#B106CD] border-r-white border-[color:#B106CD]`
-                                    : `border-[color:#B106CD] border-dashed`
-                            }`}
-                        >
-                            <div>01</div>
-                            Verify Credentials
-                        </div>
-                    </div>
+            <div className="max-w-md mx-auto mt-6">
+                <h1 className="text-center text-2xl font-bold mb-8">
+                    Admin Authentication
+                </h1>
 
-                    {/* Step 2: normal-height:fit; mobile-view: 6rem */}
-                    <div
-                        className={`w-full h-24 lg:h-fit ${
-                            step === 2 ? `font-medium` : ``
-                        }`}
-                    >
-                        <div
-                            className={`h-full border-2 border-l-0 rounded-r-lg px-5 py-2 ${
-                                step >= 2
-                                    ? `text-white bg-[color:#B106CD] border-[color:#B106CD]`
-                                    : `border-[color:#B106CD] border-dashed`
-                            }`}
-                        >
-                            <div>02</div>
-                            Go to Dashboard!
-                        </div>
-                    </div>
-                </div>
+                <StepIndicator steps={["Verify Credentials", "Done"]} current={step} />
 
-                {/* Error Message */}
                 {message.errorMsg && (
-                    <h1 className="rounded p-3 my-2 bg-red-200 text-red-600 font-medium">
-                        {message.errorMsg}
-                    </h1>
+                    <Alert variant="destructive" className="mt-4">{message.errorMsg}</Alert>
                 )}
-
-                {/* Success Message */}
                 {message.successMsg && (
-                    <h1 className="rounded p-3 my-2 bg-green-200 text-green-600 font-medium">
-                        {message.successMsg}
-                    </h1>
+                    <Alert variant="success" className="mt-4">{message.successMsg}</Alert>
                 )}
 
-                {/* Steps Content */}
-                <div className="bg-white p-5 rounded-lg mt-2">
-                    {
-                        /* Step 1 Content*/
-                        step === 1 && (
-                            <form onSubmit={handleSubmit}>
-                                <label className="block mb-2 text-sm font-medium text-gray-700">
-                                    Enter your Registered Email address
-                                </label>
-                                <input
-                                    type="email"
+                <div className="bg-card border border-border rounded-xl shadow-sm p-6 mt-4">
+                    {step === 1 && (
+                        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                            <div className="flex flex-col gap-1.5">
+                                <Label htmlFor="email">Registered Email Address</Label>
+                                <Input
                                     id="email"
-                                    name="email"
+                                    type="email"
                                     value={email}
-                                    className="bg-gray-100 p-2 mx-2 mb-4 focus:outline-none rounded-lg w-full"
                                     onChange={(e) => setEmail(e.target.value)}
+                                    required
                                 />
-
-                                <label className="block mb-2 text-sm font-medium text-gray-700">
-                                    Enter your Password
-                                </label>
-                                <input
-                                    type="password"
-                                    id="password"
-                                    name="password"
-                                    value={password}
-                                    className="bg-gray-100 p-2 mx-2 mb-4 focus:outline-none rounded-lg w-full"
-                                    onChange={(e) =>
-                                        setPassword(e.target.value)
-                                    }
-                                />
-
-                                { <p className="text-sm text-gray-700 mt-6">
-                                    *You have the option to designate yourself
-                                    as an admin for testing purposes by
-                                    following this{" "}
-                                    <a
-                                        href="https://nexa-dev.vercel.app/"
-                                        target="_blank"
-                                        className="text-[color:#B106CD]"
-                                    >
-                                        link.
-                                    </a>
-                                </p> }
-
-                                <button
-                                    type="submit"
-                                    className="btn text-white bg-[color:#B106CD] hover:bg-[color:#B106CD] w-full mt-4 mb-4 sm:w-auto sm:mb-0"
-                                >
-                                    Verify
-                                </button>
-
-                                {/* <button
-                                    type="submit"
-                                    onClick={() => {
-                                        setEmail("invite.testing@gmail.com");
-                                        setPassword("invite123");
-                                    }}
-                                    className="btn text-white bg-gray-700 hover:bg-gray-800 mt-4 w-full sm:w-auto sm:ml-4"
-                                >
-                                    Use Test Credentials
-                                </button> */}
-                            </form>
-                        )
-                    }
-                    {
-                        /* Step 2 Content */
-                        step === 2 && (
-                            <div>
-                                <div className="bg-green-50 border-b border-green-400 text-green-800 text-sm p-4 flex justify-between">
-                                    <div>
-                                        <div className="flex items-center">
-                                            <p>
-                                                <span className="font-bold">
-                                                    Hey there!{" "}
-                                                </span>
-                                                Welcome back, you're
-                                                successfully signed in!
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() =>
-                                        router.push("/admin/dashboard")
-                                    }
-                                    className="mt-4 bg-[color:#B106CD] text-white py-2 px-4 rounded hover:bg-[color:#B106CD] transition ease-in-out"
-                                >
-                                    Go to your dashboard
-                                </button>
                             </div>
-                        )
-                    }
+                            <div className="flex flex-col gap-1.5">
+                                <Label htmlFor="password">Password</Label>
+                                <Input
+                                    id="password"
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <Button type="submit" disabled={submitting}>
+                                {submitting ? "Verifying..." : "Verify"}
+                            </Button>
+                            <button
+                                type="button"
+                                onClick={() => router.push("/admin/forgot-password")}
+                                className="text-sm text-muted-foreground hover:text-primary self-center"
+                            >
+                                Forgot password?
+                            </button>
+                        </form>
+                    )}
+
+                    {step === 2 && (
+                        <div className="flex flex-col gap-4">
+                            <Alert variant="success">
+                                <span className="font-bold">Hey there! </span>
+                                Welcome back, you&apos;re successfully signed in!
+                            </Alert>
+                            <Button onClick={() => router.push("/admin/dashboard")}>
+                                Go to your dashboard
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

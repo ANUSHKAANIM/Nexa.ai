@@ -1,224 +1,198 @@
+const crypto = require("crypto");
 const { Event } = require("../models/event");
-const Admin = require("../models/admin");
 const User = require("../models/user");
-const dotenv = require("dotenv");
-dotenv.config();
+const { sendCheckInMail } = require("./emailController");
+const { ok, fail } = require("../libs/response");
+const { promoteFromWaitlist } = require("./paymentController");
 
-const jwt = require("jsonwebtoken");
-const JWT_SECRET = process.env.JWT_SECRET;
+const canManageEvent = (event, user) =>
+    user.role === "superadmin" || event.admin_id === user.id;
 
-const nodemailer = require("nodemailer");
+// Shared by /getallevents and /event/mine — filters in MongoDB (indexed)
+// instead of the client fetching every event and filtering in a useEffect,
+// which stops scaling once there are more than a couple hundred events.
+//
+// `date` is stored as a "DD/MM/YYYY" string (not a real Date), so a plain
+// $gte on it would sort lexicographically, not chronologically — this
+// rebuilds a "YYYY-MM-DD" string via $expr to compare correctly without
+// needing a schema migration.
+function buildEventFilter({ q, category, dateFrom, priceMin, priceMax }) {
+    const filter = {};
+    const exprClauses = [];
 
-function sendCheckInMail(data) {
-    let transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-            user: process.env.NODE_MAILER_USER,
-            pass: process.env.NODE_MAILER_PASS,
-        },
-        tls: {
-            rejectUnauthorized: false,
-        },
-    });
-
-    let mailOptions = {
-        from: process.env.NODE_MAILER_USER,
-        to: data.email,
-        subject: `${data.name} You've Checked In - NEXA`,
-        html: `Dear ${data.name},<br><br>
-           <strong>Congratulations, you've successfully checked in!</strong><br><br>
-           Name: ${data.name}<br>
-           Registration Number: ${data.regNo}<br>
-           Contact Number: ${data.number}<br><br>
-           If you have any questions or concerns, please don't hesitate to contact us:<br>
-           Anushka Nim: nimanushka@gmail.com<br>
-           Thank you for choosing NEXA<br><br>
-           Best regards,<br>
-           The NEXA Team`,
-    };
-
-    transporter.sendMail(mailOptions, function (err, success) {
-        if (err) {
-            console.log(err);
-        } else {
-            console.log("Checked In Email sent successfully");
-        }
-    });
-}
-
-const postEvent = async (req, res) => {
-    const Name = req.body.name;
-    const Venue = req.body.venue;
-    const Date = req.body.date;
-    const Time = req.body.time;
-    const Desc = req.body.description;
-    const Price = req.body.price;
-    const Profile = req.body.profile;
-    const Cover = req.body.cover;
-    const Organizer = req.body.organizer;
-
-    const adminId = req.body.admin_id;
-    console.log("Admin mil gaya: ", adminId);
-
-    const secret = JWT_SECRET;
-    const payload = {
-        email: Name,
-    };
-
-    const token = await jwt.sign(payload, secret);
-
-    const new_event = new Event({
-        event_id: token,
-        name: Name,
-        venue: Venue,
-        date: Date,
-        time: Time,
-        description: Desc,
-        price: Price,
-        profile: Profile,
-        cover: Cover,
-        organizer: Organizer,
-    });
-
-    try {
-        new_event.save((error, success) => {
-            if (error) console.log(error);
-            else console.log("Saved::New Event::created.");
+    if (q) filter.name = { $regex: q, $options: "i" };
+    if (category) filter.category = category;
+    if (priceMin != null || priceMax != null) {
+        filter.price = {};
+        if (priceMin != null) filter.price.$gte = priceMin;
+        if (priceMax != null) filter.price.$lte = priceMax;
+    }
+    if (dateFrom) {
+        exprClauses.push({
+            $gte: [
+                {
+                    $concat: [
+                        { $substrCP: ["$date", 6, 4] },
+                        "-",
+                        { $substrCP: ["$date", 3, 2] },
+                        "-",
+                        { $substrCP: ["$date", 0, 2] },
+                    ],
+                },
+                dateFrom,
+            ],
         });
-    } catch (err) {
-        console.log(err);
+    }
+    if (exprClauses.length) {
+        filter.$expr = exprClauses.length === 1 ? exprClauses[0] : { $and: exprClauses };
     }
 
-    Admin.updateOne(
-        { admin_id: adminId },
-        {
-            $push: {
-                eventCreated: {
-                    event_id: token,
-                    name: Name,
-                    venue: Venue,
-                    date: Date,
-                    time: Time,
-                    description: Desc,
-                    price: Price,
-                    profile:
-                        Profile == null
-                            ? "https://i.etsystatic.com/15907303/r/il/c8acad/1940223106/il_794xN.1940223106_9tfg.jpg"
-                            : Profile,
-                    cover:
-                        Cover == null
-                            ? "https://eventplanning24x7.files.wordpress.com/2018/04/events.png"
-                            : Cover,
-                    organizer: Organizer,
-                },
-            },
-        },
-        function (err) {
-            if (err) {
-                console.log(err);
-            }
-        }
-    );
+    return filter;
+}
 
-    res.status(200).send({ msg: "event created", event_id: token });
+async function paginate(baseFilter, { page, limit }) {
+    const skip = (page - 1) * limit;
+    const [events, total] = await Promise.all([
+        Event.find(baseFilter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+        Event.countDocuments(baseFilter),
+    ]);
+    return { events, total, page, totalPages: Math.max(1, Math.ceil(total / limit)) };
+}
+
+// route - POST /post/event  (admin/superadmin)
+const postEvent = async (req, res) => {
+    const {
+        name,
+        venue,
+        date,
+        time,
+        description,
+        price,
+        profile,
+        cover,
+        organizer,
+        category,
+        capacity,
+    } = req.body;
+
+    const eventId = crypto.randomUUID();
+
+    const eventData = {
+        event_id: eventId,
+        admin_id: req.user.id,
+        name,
+        venue,
+        date,
+        time,
+        description,
+        price,
+        organizer,
+        category,
+        capacity: capacity ?? null,
+    };
+    if (profile) eventData.profile = profile;
+    if (cover) eventData.cover = cover;
+
+    const newEvent = await Event.create(eventData);
+
+    return ok(res, { event_id: newEvent.event_id }, "Event created", 201);
 };
 
+// route - GET /event/mine  (admin/superadmin) — the admin dashboard's event
+// list; queried live from Event so it can never drift from an edited/deleted
+// event the way a denormalized copy on the Admin doc would.
+const myEvents = async (req, res) => {
+    const ownerFilter = req.user.role === "superadmin" ? {} : { admin_id: req.user.id };
+    const filter = { ...ownerFilter, ...buildEventFilter(req.query) };
+    const result = await paginate(filter, req.query);
+    return ok(res, result);
+};
+
+// route - PATCH /event/:event_id  (owning admin/superadmin)
+const updateEvent = async (req, res) => {
+    const event = await Event.findOne({ event_id: req.params.event_id });
+    if (!event) return fail(res, "Event not found", 404);
+    if (!canManageEvent(event, req.user)) {
+        return fail(res, "You don't have permission to edit this event", 403);
+    }
+
+    const capacityRaised =
+        req.body.capacity != null &&
+        (event.capacity == null || req.body.capacity > event.capacity);
+
+    Object.assign(event, req.body);
+    await event.save();
+
+    if (capacityRaised) await promoteFromWaitlist(event.event_id);
+
+    return ok(res, event, "Event updated");
+};
+
+// route - GET /getallevents
 const allEvents = async (req, res) => {
-    Event.find({})
-        .then((data) => {
-            res.status(200).send(data);
-        })
-        .catch((err) => {
-            res.status(400).send({ msg: "Error fetching data", error: err });
-        });
+    const filter = buildEventFilter(req.query);
+    const result = await paginate(filter, req.query);
+    return ok(res, result);
 };
 
+// route - POST /getevent
 const particularEvent = async (req, res) => {
-    const eventId = req.body.event_id;
-    Event.find({ event_id: eventId })
-        .then((data) => {
-            res.status(200).send(data[0]);
-        })
-        .catch((err) => {
-            res.status(400).send({ msg: "Error fetching event", error: err });
-        });
+    const event = await Event.findOne({ event_id: req.body.event_id });
+    if (!event) return fail(res, "Event not found", 404);
+    return ok(res, event);
 };
 
+// route - POST /deleteevent  (owning admin/superadmin)
 const deleteEvent = async (req, res) => {
-    const eventId = req.body.event_id;
-    const adminId = req.body.admin_id;
-
-    Event.deleteOne({ event_id: eventId }, function (err) {
-        if (err) return handleError(err);
-        else {
-            console.log("Event deleted::events collection.");
-        }
-    });
-
-    Admin.updateOne(
-        { admin_id: adminId },
-        { $pull: { eventCreated: { event_id: eventId } } },
-        function (err) {
-            if (err) return handleError(err);
-            else {
-                console.log("Event deleted::admin collection.");
-            }
-        }
-    );
-    res.status(200).send({ msg: "success" });
-};
-
-const checkin = async (req, res) => {
-    const eventId = req.body.event_id;
-    const userList = req.body.checkInList;
-
-    let eventName = "";
-
-    Event.find({ event_id: eventId })
-        .then((data) => {
-            eventName = data[0].name;
-            console.log(eventName);
-        })
-        .catch((err) => {
-            res.status(400).send({ msg: "Error fetching event", error: err });
-        });
-
-    for (let i = 0; i < userList.length; i++) {
-        Event.updateOne(
-            { event_id: eventId, "participants.id": userList[i] },
-            { $set: { "participants.$.entry": true } },
-            function (err) {
-                if (err) return handleError(err);
-                else {
-                    console.log(`user :: checked-in`);
-                }
-            }
+    const event = await Event.findOne({ event_id: req.body.event_id });
+    if (!event) return fail(res, "Event not found", 404);
+    if (!canManageEvent(event, req.user)) {
+        return fail(
+            res,
+            "You don't have permission to delete this event",
+            403
         );
     }
 
-    for (let i = 0; i < userList.length; i++) {
-        User.find({ user_token: userList[i] })
-            .then((data) => {
-                const data_obj = {
-                    name: data[0].username,
-                    regNo: data[0].reg_number,
-                    email: data[0].email,
-                    number: data[0].contactNumber,
-                    event: eventName,
-                };
+    await Event.deleteOne({ event_id: event.event_id });
 
-                sendCheckInMail(data_obj);
-            })
-            .catch((err) => {
-                // console.log({ msg: "Error fetching event", error: err });
-            });
+    return ok(res, null, "success");
+};
+
+// route - POST /event/checkin  (owning admin/superadmin)
+const checkin = async (req, res) => {
+    const { event_id: eventId, checkInList: userList } = req.body;
+
+    const event = await Event.findOne({ event_id: eventId });
+    if (!event) return fail(res, "Event not found", 404);
+    if (!canManageEvent(event, req.user)) {
+        return fail(res, "You don't have permission for this event", 403);
     }
 
-    res.status(200).send({ msg: "success" });
+    await Event.updateOne(
+        { event_id: eventId, "participants.id": { $in: userList } },
+        { $set: { "participants.$[p].entry": true } },
+        { arrayFilters: [{ "p.id": { $in: userList } }] }
+    );
+
+    const users = await User.find({ user_token: { $in: userList } });
+    users.forEach((user) => {
+        sendCheckInMail({
+            name: user.username,
+            regNo: user.reg_number,
+            email: user.email,
+            number: user.contactNumber,
+            event: event.name,
+        });
+    });
+
+    return ok(res, null, "success");
 };
 
 module.exports = {
     postEvent,
+    updateEvent,
+    myEvents,
     allEvents,
     particularEvent,
     deleteEvent,
