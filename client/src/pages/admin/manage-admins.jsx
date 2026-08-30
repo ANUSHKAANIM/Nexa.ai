@@ -1,6 +1,6 @@
 import PageShell from "@/components/PageShell";
-import { getSession } from "@/utils/getSession";
 import { apiGet, apiPost, apiPatch } from "@/utils/api";
+import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { UserPlus } from "lucide-react";
@@ -18,21 +18,27 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog";
 
-export async function getServerSideProps(context) {
-    const session = await getSession(context);
-    if (session?.role !== "superadmin") {
-        return { redirect: { destination: "/admin/dashboard", permanent: false } };
-    }
-    return { props: {} };
-}
-
+// Role guard runs client-side (not via getServerSideProps) because the
+// client and API can be deployed to separate domains, where the session
+// cookie never reaches the client's own server-rendering request — see
+// NavBar for the same pattern. The real authorization is enforced by
+// /admin/list itself regardless; this only controls the redirect UX.
 export default function ManageAdmins() {
+    const router = useRouter();
     const [admins, setAdmins] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [showInvite, setShowInvite] = useState(false);
     const [inviteForm, setInviteForm] = useState({ name: "", email: "" });
     const [inviting, setInviting] = useState(false);
+
+    useEffect(() => {
+        apiGet("/admin/details")
+            .then((data) => {
+                if (data.role !== "superadmin") router.push("/admin/dashboard");
+            })
+            .catch(() => router.push("/admin/auth"));
+    }, []);
 
     const fetchAdmins = async () => {
         try {

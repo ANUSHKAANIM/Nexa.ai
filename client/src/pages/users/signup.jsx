@@ -1,5 +1,4 @@
-import { getSession } from "@/utils/getSession";
-import { apiPost } from "@/utils/api";
+import { apiGet, apiPost } from "@/utils/api";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { ArrowLeft } from "lucide-react";
@@ -9,14 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-export async function getServerSideProps(context) {
-    const session = await getSession(context);
-    return {
-        props: { isSignedIn: session?.role === "user" },
-    };
-}
-
-export default function SignUp({ isSignedIn }) {
+export default function SignUp() {
     const [step, setStep] = useState(1);
     const [message, setMessage] = useState({ errorMsg: "", successMsg: "" });
     const [submitting, setSubmitting] = useState(false);
@@ -28,12 +20,17 @@ export default function SignUp({ isSignedIn }) {
     const [username, setUsername] = useState("");
     const router = useRouter();
 
+    // Checked client-side (not via getServerSideProps) since the client and
+    // API can be deployed to separate domains, where the session cookie
+    // never reaches the client's own server-rendering request.
     useEffect(() => {
-        if (isSignedIn) {
-            setStep(3);
-            setMessage({ errorMsg: "", successMsg: "Redirecting you ..." });
-            setTimeout(() => router.push("/users/dashboard"), 800);
-        }
+        apiGet("/user/details")
+            .then(() => {
+                setStep(3);
+                setMessage({ errorMsg: "", successMsg: "Redirecting you ..." });
+                setTimeout(() => router.push("/users/dashboard"), 800);
+            })
+            .catch(() => {});
     }, []);
 
     const handleVerifyEmail = async (event) => {
